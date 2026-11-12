@@ -4,6 +4,8 @@
  * Idempotent: if the CSV's DATE is already in `data`, nothing is appended.
  *
  * Power Automate input:  csv  = base64ToString(<attachment ContentBytes>)
+ * Manual testing:        leave `csv` blank and paste the CSV file's text (from Notepad) into
+ *                        cell A1 of a sheet named `csv_input`; one line per row in column A.
  * Returns:               { date: "YYYY-MM-DD", rowsAdded, skipped }
  */
 
@@ -16,8 +18,9 @@ interface IngestResult {
   skipped: boolean;
 }
 
-function main(workbook: ExcelScript.Workbook, csv: string): IngestResult {
-  const lines = csv.replace(/^﻿/, "").split(/\r?\n/).filter(l => l.trim() !== "");
+function main(workbook: ExcelScript.Workbook, csv?: string): IngestResult {
+  if (!csv || csv.trim() === "") csv = readCsvSheet(workbook);
+  const lines = csv.replace(/^\uFEFF/, "").split(/\r?\n/).filter(l => l.trim() !== "");
   const header = lines[0].split(",").map(h => h.trim().toUpperCase());
   if (header.slice(0, DATA_COLUMNS.length).join(",") !== DATA_COLUMNS.join(",")) {
     throw new Error(`Unexpected STANSATTR header: ${header.join(",")}`);
@@ -37,7 +40,7 @@ function main(workbook: ExcelScript.Workbook, csv: string): IngestResult {
   if (serial === null) throw new Error("STANSATTR file has no data rows");
   const iso = serialToIso(serial);
 
-  const data = workbook.getWorksheet("data");
+  const data = sheet(workbook, "data");
   // Column A only: column T holds unrelated notes, so the sheet's used range is misleading.
   const colA = data.getRange("A:A").getUsedRange(true);
   const lastRow = colA.getRowIndex() + colA.getRowCount(); // 1-based last used row
@@ -52,6 +55,18 @@ function main(workbook: ExcelScript.Workbook, csv: string): IngestResult {
 
   workbook.refreshAllPivotTables();
   return { date: iso, rowsAdded: rows.length, skipped: false };
+}
+
+/** Rebuilds CSV text from the `csv_input` sheet (works whether Excel split the columns or not). */
+function readCsvSheet(workbook: ExcelScript.Workbook): string {
+  const sheet = workbook.getWorksheet("csv_input");
+  if (!sheet) throw new Error("csv is blank and there is no `csv_input` sheet to read from");
+  const used = sheet.getUsedRange(true);
+  if (!used) throw new Error("`csv_input` sheet is empty");
+  return used.getValues()
+    .map(r => r.filter(c => c !== "").map(c => String(c)).join(","))
+    .filter(l => l !== "")
+    .join("\n");
 }
 
 /** Accepts YYYYMMDD, YYYY-MM-DD, M/D/YYYY. Returns the Excel date serial. */
@@ -70,4 +85,10 @@ function toSerial(s: string): number {
 
 function serialToIso(serial: number): string {
   return new Date(Date.UTC(1899, 11, 30) + serial * 86400000).toISOString().slice(0, 10);
+}
+
+function sheet(workbook: ExcelScript.Workbook, name: string): ExcelScript.Worksheet {
+  const ws = workbook.getWorksheet(name);
+  if (!ws) throw new Error(`Worksheet \`${name}\` not found`);
+  return ws;
 }

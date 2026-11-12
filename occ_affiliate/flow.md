@@ -67,14 +67,37 @@ The draft appears in your Outlook **Drafts** folder for you to review and send.
 **Error handling:** add a parallel branch that runs after any step *has failed / has timed out*. It should **Send an email (V2)** to you with the expression `result('Run_applyApex')` or the failing action's error message. Both scripts throw clear errors, for example on a date mismatch, a CSV header change, or a missing email field.
 
 ## Verification (before going live)
-1. **Python reference.** Run:
+1. **Python reference.** From the repo root, install the dependencies once:
 
    ```bash
-   OCC_WORKBOOK=/path/to/Daily_Hanweck_Logs.xlsx pytest occ_affiliate/tests
+   pip install pytest openpyxl
    ```
 
-   This backtests the calculation against every day in the pivot history and the current `email` tab.
-2. **Scripts on a copy.** In a copy of the workbook, delete the latest day's rows from `data` and clear that day's `pivot!L:S` and `email!C7`. Then, from the Automate pane, run `ingestHanweck` with that day's CSV text and `applyApex` with the Apex email text. The resulting `email` table should match the one you sent manually.
+   Then run the tests. In **PowerShell**:
+
+   ```powershell
+   $env:OCC_WORKBOOK = "C:\path\to\Daily_Hanweck_Logs.xlsx"; python -m pytest occ_affiliate\tests
+   ```
+
+   In **cmd**:
+
+   ```bat
+   set OCC_WORKBOOK=C:\path\to\Daily_Hanweck_Logs.xlsx && python -m pytest occ_affiliate\tests
+   ```
+
+   In **bash/macOS**:
+
+   ```bash
+   OCC_WORKBOOK=/path/to/Daily_Hanweck_Logs.xlsx python -m pytest occ_affiliate/tests
+   ```
+
+   This backtests the calculation against every day in the pivot history and the current `email` tab. Without `OCC_WORKBOOK`, the two workbook tests are skipped.
+2. **Scripts on a copy.**
+   1. In a copy of the workbook, delete the latest day's rows from `data`, and clear that day's `pivot!L:S` and `email!C7`.
+   2. Add a sheet named `csv_input`. Open that day's `apex-STANSATTR-BULL_*.csv` in **Notepad**, select all, copy, and paste it into `csv_input!A1`.
+   3. Go to **Automate → ingestHanweck → Run**. When it asks for `csv`, leave it **blank**, and the script reads from `csv_input`. Note that `csv` means the file's *text*, not a path, because Office Scripts can't open local files. In the flow, the text comes from the email attachment automatically.
+   4. Go to **Automate → applyApex → Run**. Paste the Apex email body into `emailBody`; it doesn't matter if line breaks get lost. Set `hanweckDate` to that day as `YYYY-MM-DD`.
+   5. The `email` table should match the one you sent manually. You can delete `csv_input` afterwards.
 3. **Flow on the copy.** Point the flow at the copy and run it manually. Check the draft, then run it again and confirm `skipped: true`, meaning no duplicate rows were added.
 4. **Parallel run.** Run the flow alongside the manual process for about 2 weeks, then switch it to the master workbook.
 

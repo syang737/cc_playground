@@ -29,7 +29,7 @@ function main(workbook: ExcelScript.Workbook, emailBody: string, hanweckDate: st
   const serial = isoToSerial(apex.date);
 
   // ---- pivot tab: Apex Req (L) + Diff/DoD formulas (M..S) ----
-  const pivot = workbook.getWorksheet("pivot");
+  const pivot = sheet(workbook, "pivot");
   const colA = pivot.getRange(`A${PIVOT_FIRST_ROW}:A2000`).getValues().map(r => r[0]);
   const idx = colA.findIndex(v => typeof v === "number" && Math.floor(v) === serial);
   if (idx < 0) throw new Error(`${apex.date} not found in pivot!A — did ingestHanweck run?`);
@@ -47,7 +47,7 @@ function main(workbook: ExcelScript.Workbook, emailBody: string, hanweckDate: st
   }
 
   // ---- email tab ----
-  const email = workbook.getWorksheet("email");
+  const email = sheet(workbook, "email");
   email.getRange("C7").setValue(apex.omni);
   workbook.getApplication().calculate(ExcelScript.CalculationType.full);
 
@@ -133,4 +133,10 @@ function isoToSerial(iso: string): number {
 
 function serialToIso(serial: number): string {
   return new Date(Date.UTC(1899, 11, 30) + serial * 86400000).toISOString().slice(0, 10);
+}
+
+function sheet(workbook: ExcelScript.Workbook, name: string): ExcelScript.Worksheet {
+  const ws = workbook.getWorksheet(name);
+  if (!ws) throw new Error(`Worksheet \`${name}\` not found`);
+  return ws;
 }
